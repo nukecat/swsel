@@ -39,6 +39,45 @@ pub fn unpack_rotation(data: [u16; 3]) -> [f32; 3] {
     ]
 }
 
+#[inline(always)]
+pub fn float_to_bounds(f: f32, offset: f32, scale: f32) -> i16 {
+    ((f - offset) * scale).round() as i16
+}
+
+#[inline(always)]
+pub fn bounds_to_float(t: i16, offset: f32, scale: f32) -> f32 {
+    (t as f32) / scale + offset
+}
+
+#[inline(always)]
+pub fn new_bounds() -> [[f32; 3]; 2] {
+    [
+        [f32::INFINITY; 3],
+        [f32::NEG_INFINITY; 3]
+    ]
+}
+
+#[inline(always)]
+pub fn bounds_encapsulate(bounds: &mut [[f32; 3]; 2], block_position: [f32; 3]) {
+    for i in 0..3 {
+        bounds[0][i] = bounds[0][i].min(block_position[i]);
+        bounds[1][i] = bounds[1][i].max(block_position[i]);
+    }
+}
+
+#[inline(always)]
+pub fn bounds_center_and_size(bounds: &[[f32; 3]; 2]) -> ([f32; 3], [f32; 3]) {
+    let mut center = [0.0f32; 3];
+    let mut size = [0.0f32; 3];
+
+    for i in 0..3 {
+        center[i] = (bounds[0][i] + bounds[1][i]) * 0.5;
+        size[i] = bounds[1][i] - bounds[0][i];
+    }
+
+    (center, size)
+}
+
 pub fn pack_color(data: [u8; 3]) -> u16 {
     0
 }

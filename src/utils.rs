@@ -1,6 +1,13 @@
 const ROTATION_MULTIPLIER: f32 = (u16::MAX as f32) / 360.0f32;
 const ROTATION_INV: f32 = 360.0 / (u16::MAX as f32);
 
+#[inline(always)]
+pub fn debug_msg(msg: &str) {
+    if cfg!(debug_assertions) {
+        println!("{}", msg);
+    }
+}
+
 pub fn pack_rotation(data: [f32; 3]) -> [u16; 3] {
     let mut out = [0u16; 3];
     for (i, &angle) in data.iter().enumerate() {

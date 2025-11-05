@@ -21,3 +21,31 @@ pub struct Block {
 
     pub color : Option<[u8; 3]>
 }
+
+impl Block {
+
+}
+
+pub struct ColorKey {
+    time: f32,
+    color: [f32; 4]
+}
+
+pub struct AlphaKey {
+    time: f32,
+    alpha: f32
+}
+
+pub struct Gradient {
+    color_keys: Vec<ColorKey>,
+    alpha_keys: Vec<AlphaKey>
+}
+
+pub struct BlockMetadata {
+    pub ticks: Vec<bool>,
+    pub values: Vec<f32>,
+    pub fields: Vec<Vec<Weak<Block>>>,
+    pub colors: Vec<[f32; 4]>,
+    pub gradients: Vec<Gradient>,
+    pub vectors: Vec<[f32; 3]>
+}

@@ -56,8 +56,9 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
             );
         }
     }
-
+    
     w.write_u8(version)?;
+    debug!("[version: u8] = {:#X}\n", version);
 
     if version > 5 {
         let bblocks = building_sdata.blocks.borrow();
@@ -97,19 +98,28 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
         building_sdata.rotation_lookup = avg_rotations > (if building_sdata.single_byte_rotation {1.2f32} else {1.5f32}) && rotations_len < u16::MAX as usize;
         building_sdata.single_byte_rotation &= building_sdata.rotation_lookup;
 
-        w.write_u8(if building_sdata.color_lookup {colors_len as u8} else {u8::MAX})?;
-        w.write_u16::<LittleEndian>(if building_sdata.rotation_lookup {rotations_len as u16} else {u16::MAX})?;
+        let color_lookup_val = if building_sdata.color_lookup {colors_len as u8} else {u8::MAX};
+        w.write_u8(color_lookup_val)?;
+        debug!("[color_lookup: u8] = {:#X}\n", color_lookup_val);
+
+        let rotation_lookup_val = if building_sdata.rotation_lookup {rotations_len as u16} else {u16::MAX};
+        w.write_u16::<LittleEndian>(rotation_lookup_val)?;
+        debug!("[rotation_lookup: u16] = {:#X}\n", rotation_lookup_val);
 
         if building_sdata.color_lookup {
             for color in colors.iter() {
                 w.write_u16::<LittleEndian>(*color.0)?;
+                debug!("[packed_color: u16] = {:#X}\n", *color.0);
             }
         }
         if building_sdata.rotation_lookup {
             for rotation in rotations.iter() {
+                debug!("[rotation: [u16; 3]]: \n");
                 for value in rotation.0.iter() {
                     w.write_u16::<LittleEndian>(*value)?;
+                    debug!("{:#X} ", *value);
                 }
+                debug!("\n");
             }
         }
     }
@@ -118,6 +128,7 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
     {
         let broots = building_sdata.roots.borrow().clone();
         for root in broots.iter() {
+            debug!("[block]: \n");
             write_root(&mut w, root, &mut building_sdata)?;
         }
     }
@@ -126,6 +137,7 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
     {
         let bblocks = building_sdata.blocks.borrow().clone();
         for block in bblocks.iter() {
+            debug!("[root]: \n");
             write_block(&mut w, block, &mut building_sdata)?;
         }
     }

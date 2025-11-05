@@ -80,10 +80,10 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
             if let Some(color) = block.color {
                 colored_c += 1;
 
+                let colors_len = colors.len();
                 let packed_color = pack_color(color);
-                let colors_len = colors.len() as u16;
                 block_data.packed_color = packed_color;
-                block_data.color_id = *colors.entry(packed_color).or_insert(colors_len as u8) as u8;
+                block_data.color_id = *colors.entry(packed_color).or_insert(colors_len as u8);
             }
         }
 

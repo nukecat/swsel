@@ -1,6 +1,8 @@
 pub mod building;
 pub mod root;
 pub mod block;
+
+#[macro_use]
 pub mod utils;
 mod io;
 

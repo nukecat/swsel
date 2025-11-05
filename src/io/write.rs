@@ -1,5 +1,6 @@
 use std::io::{Write, Read};
 use std::io;
+use crate::root;
 use crate::{building::*, root::*, block::*, utils::*, io::types::*};
 use indexmap::IndexMap;
 use std::rc::*;
@@ -24,6 +25,7 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
             for block in root.blocks.iter() {
                 let mut block_sdata = BlockSerializationData::new();
                 block_sdata.bid = current_bid;
+                block_sdata.root = Rc::as_ptr(root);
                 building_sdata.blocks_sdata.insert(Rc::as_ptr(block), block_sdata);
                 bblocks.push(block.clone());
                 current_bid

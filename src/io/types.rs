@@ -1,10 +1,10 @@
 use crate::{block::*, root::*};
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, ptr::null, rc::Rc};
 use indexmap::{IndexMap};
 
 pub(crate) struct BlockSerializationData {
     pub(crate) bid: u16,
-    pub(crate) root: u16,
+    pub(crate) root: *const Root,
     pub(crate) color_id: u8,
     pub(crate) rotation_id: u16,
     pub(crate) packed_color: u16,
@@ -15,7 +15,7 @@ impl BlockSerializationData {
     pub(crate) fn new() -> Self {
         BlockSerializationData {
             bid: 0,
-            root: 0,
+            root: null(),
             color_id: 0,
             rotation_id: 0,
             packed_color: 0,
@@ -26,14 +26,18 @@ impl BlockSerializationData {
 
 pub(crate) struct RootSerializationData {
     pub(crate) rid: u16,
-    pub(crate) last_block_index: u16
+    pub(crate) last_block_index: u16,
+    pub(crate) center: [f32; 3],
+    pub(crate) size: [f32; 3]
 }
 
 impl RootSerializationData {
     pub(crate) fn new() -> Self {
         RootSerializationData {
             rid: 0,
-            last_block_index: 0
+            last_block_index: 0,
+            center: [0.0f32; 3],
+            size: [0.0f32; 3]
         }
     }
 }

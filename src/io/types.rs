@@ -25,13 +25,15 @@ impl BlockSerializationData {
 }
 
 pub(crate) struct RootSerializationData {
-    pub(crate) rid: u16
+    pub(crate) rid: u16,
+    pub(crate) last_block_index: u16
 }
 
 impl RootSerializationData {
     pub(crate) fn new() -> Self {
         RootSerializationData {
-            rid: 0
+            rid: 0,
+            last_block_index: 0
         }
     }
 }

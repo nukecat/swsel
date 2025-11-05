@@ -21,14 +21,6 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
         let mut current_rid: u16 = 0;
 
         for root in building.roots.iter() {
-            let mut root_sdata = RootSerializationData::new();
-            root_sdata.rid = current_rid;
-            building_sdata.roots_sdata.insert(Rc::as_ptr(root), root_sdata);
-            broots.push(root.clone());
-            current_rid
-                .checked_add(1)
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Too many roots, u16 index overflow!"))?;
-
             for block in root.blocks.iter() {
                 let mut block_sdata = BlockSerializationData::new();
                 block_sdata.bid = current_bid;
@@ -38,6 +30,15 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
                     .checked_add(1)
                     .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Too many blocks, u16 index overflow!"))?;
             }
+
+            let mut root_sdata = RootSerializationData::new();
+            root_sdata.rid = current_rid;
+            root_sdata.last_block_index = current_bid;
+            building_sdata.roots_sdata.insert(Rc::as_ptr(root), root_sdata);
+            broots.push(root.clone());
+            current_rid
+                .checked_add(1)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Too many roots, u16 index overflow!"))?;
         }
         if broots.len() != building_sdata.roots_sdata.len() {
             return Err(
@@ -71,7 +72,7 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
         for block in bblocks.iter() {
             let block_data = building_sdata.blocks_sdata
                 .get_mut(&Rc::as_ptr(block))
-                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block data not found."))?;
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block data not found. (In fn write_building)"))?;
             
             let packed_rotation = pack_rotation(block.rotation);
             let rotations_len = (rotations.len() as u16);
@@ -114,10 +115,10 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
         }
         if building_sdata.rotation_lookup {
             for rotation in rotations.iter() {
-                debug!("[rotation: [u16; 3]]: \n");
-                for value in rotation.0.iter() {
-                    w.write_u16::<LittleEndian>(*value)?;
-                    debug!("{:#X} ", *value);
+                debug!("[rotation: [u16; 3]]: ");
+                for &value in rotation.0.iter() {
+                    w.write_u16::<LittleEndian>(value)?;
+                    debug!("{:#X} ", value);
                 }
                 debug!("\n");
             }
@@ -146,6 +147,45 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
 }
 
 fn write_root<W: Write>(mut w: W, root: &Root, building_sdata: &mut BuildingSerializationData) -> io::Result<()> {
+    for value in root.position.iter() {w.write_f32::<LittleEndian>(*value)?;}
+    for value in root.rotation.iter() {w.write_f32::<LittleEndian>(*value)?;}
+
+    if building_sdata.version >= 1 {
+        let mut bounds: [[f32; 3]; 2] = [
+            [f32::INFINITY; 3],
+            [f32::NEG_INFINITY; 3]
+        ];
+        for block in root.blocks.iter() {
+            for i in 0..3 {
+                bounds[0][i] = bounds[0][i].min(block.position[i]);
+                bounds[1][i] = bounds[1][i].max(block.position[i]);
+            }
+        }
+
+        let mut center = [0.0f32; 3];
+        let mut size = [0.0f32; 3];
+
+        for i in 0..3 {
+            center[i] = (bounds[0][i] + bounds[1][i]) * 0.5;  // average of min and max
+            size[i] = bounds[1][i] - bounds[0][i];           // max - min
+        }
+
+        for &value in center.iter() {
+            w.write_f32::<LittleEndian>(value)?;
+        }
+        for &value in size.iter() {
+            w.write_f32::<LittleEndian>(value)?;
+        }
+    }
+
+    if building_sdata.version >= 2 {
+        let root_sdata = building_sdata.roots_sdata
+            .get(&(root as *const Root))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block data not found. (In fn write_root)"))?;
+        
+        w.write_u16::<LittleEndian>(root_sdata.last_block_index)?;
+    }
+
     Ok(())
 }
 

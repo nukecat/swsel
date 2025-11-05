@@ -74,14 +74,42 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
             
             let packed_rotation = pack_rotation(block.rotation);
             let rotations_len = (rotations.len() as u16);
-            block_data.packed_rotation = Some(packed_rotation);
-            block_data.rotation_id = Some(*rotations.entry(packed_rotation).or_insert(rotations_len));
+            block_data.packed_rotation = packed_rotation;
+            block_data.rotation_id = *rotations.entry(packed_rotation).or_insert(rotations_len);
 
             if let Some(color) = block.color {
+                colored_c += 1;
+
                 let packed_color = pack_color(color);
                 let colors_len = colors.len() as u16;
-                block_data.packed_color = Some(packed_color);
-                block_data.color_id = Some(*colors.entry(packed_color).or_insert(colors_len));
+                block_data.packed_color = packed_color;
+                block_data.color_id = *colors.entry(packed_color).or_insert(colors_len as u8) as u8;
+            }
+        }
+
+        let colors_len = colors.len();
+        let avg_colors = colored_c as f32 / colors_len as f32;
+        let rotations_len = rotations.len();
+        let avg_rotations = block_count as f32 / rotations_len as f32;
+
+        building_sdata.color_lookup = avg_colors > 2f32 && colors_len < u8::MAX as usize;
+        building_sdata.single_byte_rotation = rotations_len <= usize::pow(2usize, u8::BITS);
+        building_sdata.rotation_lookup = avg_rotations > (if building_sdata.single_byte_rotation {1.2f32} else {1.5f32}) && rotations_len < u16::MAX as usize;
+        building_sdata.single_byte_rotation &= building_sdata.rotation_lookup;
+
+        w.write_u8(if building_sdata.color_lookup {colors_len as u8} else {u8::MAX})?;
+        w.write_u16::<LittleEndian>(if building_sdata.rotation_lookup {rotations_len as u16} else {u16::MAX})?;
+
+        if building_sdata.color_lookup {
+            for color in colors.iter() {
+                w.write_u16::<LittleEndian>(*color.0)?;
+            }
+        }
+        if building_sdata.rotation_lookup {
+            for rotation in rotations.iter() {
+                for value in rotation.0.iter() {
+                    w.write_u16::<LittleEndian>(*value)?;
+                }
             }
         }
     }

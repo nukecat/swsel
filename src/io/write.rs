@@ -1,9 +1,12 @@
+use core::str;
 use std::io::{Write, Read};
-use std::io;
+use std::ops::Deref;
+use std::{io, u8};
 use crate::root;
 use crate::{building::*, root::*, block::*, utils::*, io::types::*};
 use indexmap::IndexMap;
 use std::rc::*;
+use std::io::{Error, ErrorKind};
 use byteorder::{WriteBytesExt, LittleEndian};
 
 pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> io::Result<()> {

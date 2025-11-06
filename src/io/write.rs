@@ -176,5 +176,167 @@ fn write_root<W: Write>(mut w: W, root: &Root, building_sdata: &mut BuildingSeri
 }
 
 fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingSerializationData) -> io::Result<()> {
+
+    // Processing block position and rotation
+    {
+        let block_sdata = building_sdata.blocks_sdata
+            .get_mut(&(block as *const Block))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block serialization data not found."))?;
+        
+        if building_sdata.version == 0 {
+            for &value in block.position.iter() {
+                w.write_f32::<LittleEndian>(value)?;
+            }
+        } else {
+            let root_sdata = building_sdata.roots_sdata
+                .get_mut(&block_sdata.root)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Root serialization data not found."))?;
+            for i in 0..3 {
+                let value = float_to_bounds(block.position[i], root_sdata.center[i], root_sdata.size[i]);
+                w.write_i16::<LittleEndian>(value)?;
+            }
+        }
+
+        if building_sdata.rotation_lookup {
+            if building_sdata.single_byte_rotation {
+                w.write_u8(block_sdata.rotation_id as u8)?;
+            } else {
+                w.write_u16::<LittleEndian>(block_sdata.rotation_id)?;
+            }
+        } else {
+            for value in block_sdata.packed_rotation {
+                w.write_u16::<LittleEndian>(value)?;
+            }
+        }
+
+        w.write_u8(block.id)?;
+
+        if building_sdata.version < 2 {
+            w.write_u16::<LittleEndian>(block_sdata.rid)?;
+        }
+    }
+    // ---
+
+    // Collecting connection id's from blocks that are not deleted and placed onto current building.
+    let mut connection_ids: Vec<u16> = Vec::new();
+    connection_ids.reserve(block.connections.borrow().len());
+    for connected_block in block.connections.borrow().iter()
+        .filter_map(|w| w.upgrade())
+    {
+        if let Some(connected_block_sdata) = building_sdata.blocks_sdata.get(&Rc::as_ptr(&connected_block)) {
+            connection_ids.push(connected_block_sdata.bid);
+        }
+    }
+    // ---
+
+    // Checking load block id.
+    let mut load_id: Option<u16> = None;
+    if let Some(load_block_sdata) = building_sdata.blocks_sdata.get(&Weak::as_ptr(&block.load)) {
+        load_id = Some(load_block_sdata.bid);
+    }
+    // ---
+
+    let flags = [
+        block.name.is_some(),
+        connection_ids.len() > 0,
+        block.metadata.is_none(),
+        block.color.is_none(),
+        load_id.is_some(),
+        false, // Aditional ints flag (not used).
+        block.enable_state_current > 1.0f32,
+        building_sdata.version >= 3 && block.enable_state_current != 0.0f32
+    ];
+
+    let flags_packed = pack_bools(&flags)[0];
+    w.write_u8(flags_packed)?;
+
+    let write_interactable = building_sdata.version == 0 || true;
+
+    // Enable state current
+    if write_interactable || flags[7] {
+        w.write_u8((if flags[6] {1.0f32} else {u8::MAX as f32} * block.enable_state_current) as u8)?;
+    }
+    // ---
+
+    // Parameters that are used only in interactable blocks.
+    if write_interactable {
+        // Name
+        if let Some(ref name) = block.name {
+            write_string_7bit(&mut w, name)
+                .map_err(|e| Error::new(ErrorKind::Other, format!("name -> {:?}", e)))?;
+        }
+        // ---
+
+        // Enable state (useless comment)
+        w.write_u8((block.enable_state * u8::MAX as f32) as u8)?;
+        // ---
+
+        // Load
+        if flags[4] {
+            let load_block_data = building_sdata.blocks_sdata
+                .get_mut(&Weak::as_ptr(&block.load))
+                .ok_or_else(|| Error::new(ErrorKind::NotFound, "Block data not found."))?;
+
+            w.write_u16::<LittleEndian>(load_block_data.bid)?;    
+        }
+        // ---
+
+        // Connections
+        if flags[1] {
+            let connections_count = connection_ids.len();
+
+            if building_sdata.version == 0 {
+                let connections_count_u16: u16 = u16::try_from(connections_count)
+                    .map_err(|_| Error::new(ErrorKind::InvalidData, "Too many connections! (its over 65535 connections!!! how did you get there?)"))?;
+                w.write_u16::<LittleEndian>(connections_count_u16)?;
+            } else {
+                let connections_count_u8: u8 = u8::try_from(connections_count)
+                    .map_err(|_| Error::new(ErrorKind::InvalidData, "Too many connections! (255 connections max for version > 0, consider reducing ammount of connections per block or use version = 0)"))?;
+                w.write_u8(connections_count_u8)?;
+            }
+
+            for &bid in connection_ids.iter() {
+                w.write_u16::<LittleEndian>(bid)?;
+            }
+        }
+        // ---
+    }
+    // ---
+
+    // Not used.
+    // if !flags[5] && write_interactable {}
+    // ---
+
+    // Metadata
+    if !flags[2] && write_interactable {
+        write_block_metadata(&mut w, block, building_sdata)
+            .map_err(|e| Error::new(ErrorKind::Other, format!("metadata -> {:?}", e)))?;
+    }
+    // ---
+
+    // Color
+    if !flags[3] {
+        if building_sdata.version == 0 {
+            for &value in block.color.unwrap_or_default().iter() {
+                w.write_u8(value)?;
+            }
+            w.write_u8(u8::MAX)?; // Value for alpha channel that does nothing.
+        } else {
+            if building_sdata.color_lookup {
+                let block_sdata = building_sdata.blocks_sdata
+                    .get_mut(&(block as *const Block))
+                    .ok_or_else(|| Error::new(ErrorKind::NotFound, "Block data not found."))?;
+                w.write_u8(block_sdata.color_id)?;
+            } else {
+                w.write_u16::<LittleEndian>(pack_color(block.color.unwrap_or_default()))?;
+            }
+        }
+    }
+    // ---
+
+    Ok(())
+}
+
+fn write_block_metadata<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingSerializationData) -> io::Result<()> {
     Ok(())
 }

@@ -139,6 +139,19 @@ pub fn read_7bit_encoded_int(mut r: impl Read) -> io::Result<u32> {
     Ok(result)
 }
 
+pub fn write_string_7bit<W: Write>(mut w: W, s: &str) -> io::Result<()> {
+    write_7bit_encoded_int(&mut w, s.len() as u32)?;
+    w.write_all(s.as_bytes())
+}
+
+pub fn read_string_7bit<R: Read>(mut r: R) -> io::Result<String> {
+    let len = read_7bit_encoded_int(&mut r)? as usize;
+    let mut buf = vec![0u8; len];
+    r.read_exact(&mut buf)?;
+    Ok(String::from_utf8(buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?)
+}
+
+
 pub fn pack_color(data: [u8; 3]) -> u16 {
     0
 }

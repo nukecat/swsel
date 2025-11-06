@@ -12,6 +12,7 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
 
     let [root_count, block_count] = building.count_roots_and_blocks();
     
+    // Collecting block and root references into vectors and creating serialization data container for each.
     {
         let mut broots = building_sdata.roots.borrow_mut();
         broots.reserve(root_count);
@@ -60,10 +61,12 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
             );
         }
     }
+    // ---
     
     w.write_u8(version)?;
     debug!("[version: u8] = {:#X}\n", version);
 
+    // Collecting rotations and colors to vectors and deciding if to use them.
     if version > 5 {
         let bblocks = building_sdata.blocks.borrow();
 
@@ -75,7 +78,7 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
         for block in bblocks.iter() {
             let block_sdata = building_sdata.blocks_sdata
                 .get_mut(&Rc::as_ptr(block))
-                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block data not found. (In fn write_building)"))?;
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block serialization data not found."))?;
             
             let packed_rotation = pack_rotation(block.rotation);
             let rotations_len = (rotations.len() as u16);
@@ -102,6 +105,7 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
         building_sdata.rotation_lookup = avg_rotations > (if building_sdata.single_byte_rotation {1.2f32} else {1.5f32}) && rotations_len < u16::MAX as usize;
         building_sdata.single_byte_rotation &= building_sdata.rotation_lookup;
 
+        // Writing color and rotation vectors
         let color_lookup_val = if building_sdata.color_lookup {colors_len as u8} else {u8::MAX};
         w.write_u8(color_lookup_val)?;
         debug!("[color_lookup: u8] = {:#X}\n", color_lookup_val);
@@ -152,25 +156,37 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
 fn write_root<W: Write>(mut w: W, root: &Root, building_sdata: &mut BuildingSerializationData) -> io::Result<()> {
     let root_sdata = building_sdata.roots_sdata
         .get_mut(&(root as *const Root))
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block data not found. (In fn write_root)"))?;
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block serialization data not found."))?;
 
-    for value in root.position.iter() {w.write_f32::<LittleEndian>(*value)?;}
-    for value in root.rotation.iter() {w.write_f32::<LittleEndian>(*value)?;}
+    for value in root.position.iter() {
+        w.write_f32::<LittleEndian>(*value)?;
+    }
+    for value in root.rotation.iter() {
+        w.write_f32::<LittleEndian>(*value)?;
+    }
 
     if building_sdata.version >= 1 {
         let mut bounds = new_bounds();
-        for block in root.blocks.iter() {bounds_encapsulate(&mut bounds, block.position);}
+        for block in root.blocks.iter() {
+            bounds_encapsulate(&mut bounds, block.position);
+        }
 
         let (center, size) = bounds_center_and_size(&bounds);
 
         root_sdata.center = center;
         root_sdata.size = size;
 
-        for &value in center.iter() {w.write_f32::<LittleEndian>(value)?;}
-        for &value in size.iter() {w.write_f32::<LittleEndian>(value)?;}
+        for &value in center.iter() {
+            w.write_f32::<LittleEndian>(value)?;
+        }
+        for &value in size.iter() {
+            w.write_f32::<LittleEndian>(value)?;
+        }
     }
 
-    if building_sdata.version >= 2 {w.write_u16::<LittleEndian>(root_sdata.last_block_index)?;}
+    if building_sdata.version >= 2 {
+        w.write_u16::<LittleEndian>(root_sdata.last_block_index)?;
+    }
 
     Ok(())
 }

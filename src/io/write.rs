@@ -130,25 +130,33 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
                 debug!("\n");
             }
         }
+        // ---
     }
+    // ---
 
+    // Processing roots
     w.write_u16::<LittleEndian>(root_count as u16)?;
     {
         let broots = building_sdata.roots.borrow().clone();
         for root in broots.iter() {
-            debug!("[block]: \n");
-            write_root(&mut w, root, &mut building_sdata)?;
+            debug!("[root]: \n");
+            write_root(&mut w, root, &mut building_sdata)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("root -> {:?}", e)))?;
         }
     }
+    // ---
 
+    // Processing blocks
     w.write_u16::<LittleEndian>(block_count as u16)?;
     {
         let bblocks = building_sdata.blocks.borrow().clone();
         for block in bblocks.iter() {
-            debug!("[root]: \n");
-            write_block(&mut w, block, &mut building_sdata)?;
+            debug!("[block]: \n");
+            write_block(&mut w, block, &mut building_sdata)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("block -> {:?}", e)))?;
         }
     }
+    // ---
 
     Ok(())
 }

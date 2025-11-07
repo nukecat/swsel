@@ -126,12 +126,8 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
         }
         if building_sdata.rotation_lookup {
             for rotation in rotations.iter() {
-                debug!("[rotation: [u16; 3]]: ");
-                for &value in rotation.0.iter() {
-                    w.write_u16::<LittleEndian>(value)?;
-                    debug!("{:#X} ", value);
-                }
-                debug!("\n");
+                w.write_array(rotation.0, |w, &v| w.write_u16::<LittleEndian>(v))?;
+                debug!("[packed_rotation]: {:?}\n", rotation.0);
             }
         }
         // ---
@@ -172,12 +168,11 @@ fn write_root<W: Write>(mut w: W, root: &Root, building_sdata: &mut BuildingSeri
         .get_mut(&(root as *const Root))
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block serialization data not found."))?;
 
-    for value in root.position.iter() {
-        w.write_f32::<LittleEndian>(*value)?;
-    }
-    for value in root.rotation.iter() {
-        w.write_f32::<LittleEndian>(*value)?;
-    }
+    w.write_array(&root.position, |w, &v| w.write_f32::<LittleEndian>(v))?;
+    debug!("> [position]: {:?}\n", root.position);
+
+    w.write_array(&root.rotation, |w, &v| w.write_f32::<LittleEndian>(v))?;
+    debug!("> [rotation]: {:?}\n", root.rotation);
 
     if building_sdata.version >= 1 {
         let mut bounds = new_bounds();
@@ -190,12 +185,11 @@ fn write_root<W: Write>(mut w: W, root: &Root, building_sdata: &mut BuildingSeri
         root_sdata.center = center;
         root_sdata.size = size;
 
-        for &value in center.iter() {
-            w.write_f32::<LittleEndian>(value)?;
-        }
-        for &value in size.iter() {
-            w.write_f32::<LittleEndian>(value)?;
-        }
+        w.write_array(&center, |w, &v| w.write_f32::<LittleEndian>(v))?;
+        debug!("> [center]: {:?}\n", center);
+
+        w.write_array(&size, |w, &v| w.write_f32::<LittleEndian>(v))?;
+        debug!("> [size]: {:?}\n", size);
     }
 
     if building_sdata.version >= 2 {
@@ -285,7 +279,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
     let flags_packed = pack_bools(&flags)[0];
     w.write_u8(flags_packed)?;
 
-    let write_interactable = building_sdata.version == 0 || true;
+    let write_interactable = building_sdata.version == 0 || false;
 
     // Enable state current
     if write_interactable || flags[7] {
@@ -297,7 +291,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
     if write_interactable {
         // Name
         if let Some(ref name) = block.name {
-            write_string_7bit(&mut w, name)
+            w.write_string_7bit(name)
                 .map_err(|e| Error::new(ErrorKind::Other, format!("name -> {:?}", e)))?;
         }
         // ---
@@ -373,5 +367,45 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
 }
 
 fn write_block_metadata<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingSerializationData) -> io::Result<()> {
+    if let Some(metadata) = &block.metadata {
+        let is_custom_block = false;
+
+        match building_sdata.version {
+            0 => {
+                w.write_u16::<LittleEndian>(metadata.ticks.len() as u16)?;
+                for &value in metadata.ticks.iter() {
+                    w.write_u8(value as u8)?;
+                }
+
+                w.write_u16::<LittleEndian>(metadata.values.len() as u16)?;
+                for &value in metadata.values.iter() {
+                    w.write_f32::<LittleEndian>(value)?;
+                }
+
+                w.write_u16::<LittleEndian>((metadata.fields.borrow().len() + if metadata.vectors.len() != 0 {u16::MAX as usize / 2} else {0}) as u16)?;
+
+                if metadata.vectors.len() != 0 {
+                    for &vector in metadata.vectors.iter() {
+                        for &value in vector.iter() {
+                            w.write_f32::<LittleEndian>(value)?;
+                        }
+                    }
+                }
+
+                for field in metadata.fields.borrow().iter() {
+                    for block in field.iter()
+                        .filter_map(|w| w.upgrade())
+                    {
+
+                    }
+                }
+            }
+
+            _ => {}
+        }
+    } else {
+        return Err(Error::new(ErrorKind::Other, "no metadata"));
+    }
+
     Ok(())
 }

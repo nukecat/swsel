@@ -1,13 +1,14 @@
 use core::str;
 use std::io::{Write, Read};
 use std::ops::Deref;
-use std::{io, u8};
+use std::{io, marker, u8};
 use crate::root;
-use crate::{building::*, root::*, block::*, utils::*, io::types::*};
+use crate::{building::*, root::*, block::*, io::types::*};
 use indexmap::IndexMap;
 use std::rc::*;
 use std::io::{Error, ErrorKind};
 use byteorder::{WriteBytesExt, LittleEndian};
+use crate::io::utils::*;
 
 pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> io::Result<()> {
     let mut building_sdata = BuildingSerializationData::new();

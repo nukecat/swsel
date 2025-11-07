@@ -7,6 +7,15 @@ pub struct Building {
 }
 
 impl Building {
+    pub fn new() -> Self {
+        Self {
+            roots: Vec::new()
+        }
+    }
+    pub fn add_root(&mut self, root: Root) -> &Rc<Root> {
+        self.roots.push(Rc::new(root));
+        self.roots.last().unwrap()
+    }
     pub fn count_roots_and_blocks(&self) -> [usize; 2] {
         let mut counts: [usize; 2] = [0, 0];
         for root in self.roots.iter() {

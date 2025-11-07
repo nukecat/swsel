@@ -2,6 +2,7 @@ use std::rc::Weak;
 use std::cell::RefCell;
 use std::io::{Read, Write};
 
+#[derive(Clone, Debug)]
 pub struct Block {
     pub position: [f32; 3],
     pub rotation: [f32; 3],
@@ -44,21 +45,25 @@ impl Block {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct ColorKey {
     time: f32,
     color: [f32; 4]
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct AlphaKey {
     time: f32,
     alpha: f32
 }
 
+#[derive(Clone, Debug)]
 pub struct Gradient {
     color_keys: Vec<ColorKey>,
     alpha_keys: Vec<AlphaKey>
 }
 
+#[derive(Clone, Debug)]
 pub struct BlockMetadata {
     pub ticks: Vec<bool>,
     pub values: Vec<f32>,

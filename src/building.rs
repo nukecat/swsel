@@ -2,6 +2,7 @@ use std::rc::Rc;
 use crate::root::*;
 use std::io::{Write, Read};
 
+#[derive(Clone, Debug)]
 pub struct Building {
     pub(crate) roots: Vec<Rc<Root>>
 }

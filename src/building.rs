@@ -4,7 +4,7 @@ use std::io::{Write, Read};
 
 #[derive(Clone, Debug)]
 pub struct Building {
-    pub(crate) roots: Vec<Rc<Root>>
+    pub roots: Vec<Rc<Root>>
 }
 
 impl Building {

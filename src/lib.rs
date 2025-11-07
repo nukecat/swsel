@@ -3,15 +3,7 @@ pub mod root;
 pub mod block;
 
 #[macro_use]
-pub mod utils;
+mod utils;
+
 mod io;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_0() {
-
-    }
-}
+mod definitions;

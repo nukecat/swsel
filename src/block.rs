@@ -22,7 +22,26 @@ pub struct Block {
 }
 
 impl Block {
+    pub fn new() -> Self {
+        Block {
+            position: [0.0f32; 3],
+            rotation: [0.0f32; 3],
 
+            id: 0,
+
+            metadata: None,
+
+            name: None,
+            enable_state: 0.0f32,
+            enable_state_current: 0.0f32,
+
+            connections: RefCell::new(Vec::new()),
+
+            load: Weak::new(),
+
+            color: None
+        }
+    }
 }
 
 pub struct ColorKey {

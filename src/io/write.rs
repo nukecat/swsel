@@ -202,7 +202,9 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
 
         if building_sdata.rotation_lookup {
             if building_sdata.single_byte_rotation {
-                w.write_u8(block_sdata.rotation_id as u8)?;
+                let rotation_id_u8 = u8::try_from(block_sdata.rotation_id)
+                    .map_err(|_| Error::new(ErrorKind::Other, "rotation_id u8 overflow"))?;
+                w.write_u8(rotation_id_u8)?;
             } else {
                 w.write_u16::<LittleEndian>(block_sdata.rotation_id)?;
             }

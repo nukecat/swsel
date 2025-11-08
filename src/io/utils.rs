@@ -34,13 +34,11 @@ pub(crate) fn unpack_rotation(data: [u16; 3]) -> [f32; 3] {
     ]
 }
 
-#[inline(always)]
 pub(crate) fn float_to_bounds(f: f32, offset: f32, scale: f32) -> i16 {
     let multiplier = (1.0f32 / scale) * i16::MAX as f32;
     ((f - offset) * multiplier).round() as i16
 }
 
-#[inline(always)]
 pub(crate) fn bounds_to_float(t: i16, offset: f32, scale: f32) -> f32 {
     let multiplier = (1.0f32 / scale) * i16::MAX as f32;
     (t as f32) / multiplier + offset
@@ -61,7 +59,6 @@ pub(crate) fn new_bounds() -> [[f32; 3]; 2] {
     ]
 }
 
-#[inline(always)]
 pub(crate) fn bounds_encapsulate(bounds: &mut [[f32; 3]; 2], block_position: [f32; 3]) {
     for i in 0..3 {
         bounds[0][i] = bounds[0][i].min(block_position[i]);
@@ -69,7 +66,6 @@ pub(crate) fn bounds_encapsulate(bounds: &mut [[f32; 3]; 2], block_position: [f3
     }
 }
 
-#[inline(always)]
 pub(crate) fn bounds_center_and_size(bounds: &[[f32; 3]; 2]) -> ([f32; 3], [f32; 3]) {
     let mut center = [0.0f32; 3];
     let mut size = [0.0f32; 3];

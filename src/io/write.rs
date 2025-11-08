@@ -346,6 +346,9 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
             debug!("> [color]: {:?} +(const 0xFF)\n", block.color.get().unwrap());
             w.write_u8(u8::MAX)?; // Value for alpha channel that does nothing.
         } else {
+            let block_sdata = building_sdata.blocks_sdata
+                .get(&(block as *const Block))
+                .ok_or_else(|| Error::new(ErrorKind::NotFound, "Block data not found."))?;
             if building_sdata.color_lookup {
                 let block_sdata = building_sdata.blocks_sdata
                     .get_mut(&(block as *const Block))

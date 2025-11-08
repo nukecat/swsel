@@ -24,30 +24,23 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
         let mut bblocks = building_sdata.blocks.borrow_mut();
         bblocks.reserve(block_count);
 
-        let mut current_bid: u16 = 0;
-        let mut current_rid: u16 = 0;
+        let (mut root_id, mut block_id) = (0u16, 0u16);
 
         for root in building.roots.iter() {
             for block in root.blocks.borrow().iter() {
                 let mut block_sdata = BlockSerializationData::new();
-                block_sdata.bid = current_bid;
+                (block_sdata.rid, block_sdata.bid) = (root_id, block_id);
                 block_sdata.root = Rc::as_ptr(root);
-                block_sdata.rid = current_rid;
                 building_sdata.blocks_sdata.insert(Rc::as_ptr(block), block_sdata);
                 bblocks.push(block.clone());
-                current_bid
-                    .checked_add(1)
-                    .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Too many blocks, u16 index overflow!"))?;
+                block_id += 1;
             }
 
             let mut root_sdata = RootSerializationData::new();
-            root_sdata.rid = current_rid;
-            root_sdata.last_block_index = current_bid;
+            (root_sdata.rid, root_sdata.last_block_index) = (root_id, block_id - 1);
             building_sdata.roots_sdata.insert(Rc::as_ptr(root), root_sdata);
             broots.push(root.clone());
-            current_rid
-                .checked_add(1)
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Too many roots, u16 index overflow!"))?;
+            root_id += 1;
         }
         assert!(broots.len() == building_sdata.roots_sdata.len());
         assert!(bblocks.len() == building_sdata.blocks_sdata.len());

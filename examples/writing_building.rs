@@ -19,11 +19,11 @@ fn main() {
         let string = hello_world[y];
         for x in 0..string.len() {
             if string.as_bytes()[x] == '#' as u8 {
-                block.position = [
+                block.position.set([
                     x as f32,
                     0f32 - (y as f32),
                     0f32
-                ];
+                ]);
 
                 root.add_block(block.clone()); 
             }

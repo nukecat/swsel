@@ -8,11 +8,11 @@ fn main() {
     let mut root = Root::new();
 
     for i in 0..2048 {
-        block.position = [
+        block.position.set([
             i as f32 * 0.0625,
             f32::sin(i as f32 * 0.0625),
             0.0f32
-        ];
+        ]);
         root.add_block(block.clone());
     }
 

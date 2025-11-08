@@ -27,7 +27,7 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
         let mut current_rid: u16 = 0;
 
         for root in building.roots.iter() {
-            for block in root.blocks.iter() {
+            for block in root.blocks.borrow().iter() {
                 let mut block_sdata = BlockSerializationData::new();
                 block_sdata.bid = current_bid;
                 block_sdata.root = Rc::as_ptr(root);
@@ -84,12 +84,12 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
                 .get_mut(&Rc::as_ptr(block))
                 .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block serialization data not found."))?;
             
-            let packed_rotation = pack_rotation(block.rotation);
+            let packed_rotation = pack_rotation(block.rotation.get());
             let rotations_len = (rotations.len() as u16);
             block_sdata.packed_rotation = packed_rotation;
             block_sdata.rotation_id = *rotations.entry(packed_rotation).or_insert(rotations_len);
 
-            if let Some(color) = block.color {
+            if let Some(color) = block.color.get() {
                 colored_c += 1;
 
                 let colors_len = colors.len();
@@ -168,16 +168,16 @@ fn write_root<W: Write>(mut w: W, root: &Root, building_sdata: &mut BuildingSeri
         .get_mut(&(root as *const Root))
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block serialization data not found."))?;
 
-    w.write_array(&root.position, |w, &v| w.write_f32::<LittleEndian>(v))?;
+    w.write_array(&root.position.get(), |w, &v| w.write_f32::<LittleEndian>(v))?;
     debug!("> [position]: {:?}\n", root.position);
 
-    w.write_array(&root.rotation, |w, &v| w.write_f32::<LittleEndian>(v))?;
+    w.write_array(&root.rotation.get(), |w, &v| w.write_f32::<LittleEndian>(v))?;
     debug!("> [rotation]: {:?}\n", root.rotation);
 
     if building_sdata.version >= 1 {
         let mut bounds = new_bounds();
-        for block in root.blocks.iter() {
-            bounds_encapsulate(&mut bounds, block.position);
+        for block in root.blocks.borrow().iter() {
+            bounds_encapsulate(&mut bounds, block.position.get());
         }
 
         let (center, size) = bounds_center_and_size(&bounds);
@@ -209,9 +209,8 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block serialization data not found."))?;
         
         if building_sdata.version == 0 {
-            for &value in block.position.iter() {
-                w.write_f32::<LittleEndian>(value)?;
-            }
+            w.write_array(&block.position.get(), |w, &v| w.write_f32::<LittleEndian>(v))?;
+            debug!("> [position]: {:?}", &block.position.get());
         } else {
             let root_sdata = building_sdata.roots_sdata
                 .get_mut(&block_sdata.root)
@@ -219,7 +218,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
 
             debug!("> [position]: ");
             for i in 0..3 {
-                let value = float_to_bounds(block.position[i], root_sdata.center[i], root_sdata.size[i]);
+                let value = float_to_bounds(block.position.get()[i], root_sdata.center[i], root_sdata.size[i]);
                 w.write_i16::<LittleEndian>(value)?;
                 debug!("{:?} ", value);
             }
@@ -238,7 +237,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
             debug!("> [packed_rotation]: {:?}\n", block_sdata.packed_rotation);
         }
 
-        w.write_u8(block.id)?;
+        w.write_u8(block.id.get())?;
 
         if building_sdata.version < 2 {
             w.write_u16::<LittleEndian>(block_sdata.rid)?;
@@ -260,20 +259,20 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
 
     // Checking load block id.
     let mut load_id: Option<u16> = None;
-    if let Some(load_block_sdata) = building_sdata.blocks_sdata.get(&Weak::as_ptr(&block.load)) {
+    if let Some(load_block_sdata) = building_sdata.blocks_sdata.get(&Weak::as_ptr(&block.load.borrow())) {
         load_id = Some(load_block_sdata.bid);
     }
     // ---
 
     let flags = [
-        block.name.is_some(),
+        block.name.borrow().is_some(),
         connection_ids.len() > 0,
-        block.metadata.is_none(),
-        block.color.is_none(),
+        block.metadata.borrow().is_none(),
+        block.color.get().is_none(),
         load_id.is_some(),
         false, // Aditional ints flag (not used).
-        block.enable_state_current > 1.0f32,
-        building_sdata.version >= 3 && block.enable_state_current != 0.0f32
+        block.enable_state_current.get() > 1.0f32,
+        building_sdata.version >= 3 && block.enable_state_current.get() != 0.0f32
     ];
 
     let flags_packed = pack_bools(&flags)[0];
@@ -283,27 +282,27 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
 
     // Enable state current
     if write_interactable || flags[7] {
-        w.write_u8((if flags[6] {1.0f32} else {u8::MAX as f32} * block.enable_state_current) as u8)?;
+        w.write_u8((if flags[6] {1.0f32} else {u8::MAX as f32} * block.enable_state_current.get()) as u8)?;
     }
     // ---
 
     // Parameters that are used only in interactable blocks.
     if write_interactable {
         // Name
-        if let Some(ref name) = block.name {
+        if let Some(ref name) = *block.name.borrow() {
             w.write_string_7bit(name)
                 .map_err(|e| Error::new(ErrorKind::Other, format!("name -> {:?}", e)))?;
         }
         // ---
 
         // Enable state (useless comment)
-        w.write_u8((block.enable_state * u8::MAX as f32) as u8)?;
+        w.write_u8((block.enable_state.get() * u8::MAX as f32) as u8)?;
         // ---
 
         // Load
         if flags[4] {
             let load_block_data = building_sdata.blocks_sdata
-                .get_mut(&Weak::as_ptr(&block.load))
+                .get_mut(&Weak::as_ptr(&block.load.borrow()))
                 .ok_or_else(|| Error::new(ErrorKind::NotFound, "Block data not found."))?;
 
             w.write_u16::<LittleEndian>(load_block_data.bid)?;    
@@ -346,7 +345,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
     // Color
     if !flags[3] {
         if building_sdata.version == 0 {
-            for &value in block.color.unwrap_or_default().iter() {
+            for &value in block.color.get().unwrap_or_default().iter() {
                 w.write_u8(value)?;
             }
             w.write_u8(u8::MAX)?; // Value for alpha channel that does nothing.
@@ -357,7 +356,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
                     .ok_or_else(|| Error::new(ErrorKind::NotFound, "Block data not found."))?;
                 w.write_u8(block_sdata.color_id)?;
             } else {
-                w.write_u16::<LittleEndian>(pack_color(block.color.unwrap_or_default()))?;
+                w.write_u16::<LittleEndian>(pack_color(block.color.get().unwrap_or_default()))?;
             }
         }
     }
@@ -367,7 +366,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
 }
 
 fn write_block_metadata<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingSerializationData) -> io::Result<()> {
-    if let Some(metadata) = &block.metadata {
+    if let Some(metadata) = &*block.metadata.borrow() {
         let is_custom_block = false;
 
         match building_sdata.version {

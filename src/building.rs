@@ -29,7 +29,7 @@ impl Building {
         let mut counts: [usize; 2] = [0, 0];
         for root in self.roots.iter() {
             counts[0] += 1;
-            counts[1] += root.blocks.len();
+            counts[1] += root.blocks.borrow().len();
         }
         counts
     }

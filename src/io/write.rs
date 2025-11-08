@@ -184,7 +184,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
     // Processing block position and rotation
     {
         let block_sdata = building_sdata.blocks_sdata
-            .get_mut(&(block as *const Block))
+            .get(&(block as *const Block))
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block serialization data not found."))?;
         
         if building_sdata.version == 0 {
@@ -192,7 +192,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
             debug!("> [position]: {:?}", &block.position.get());
         } else {
             let root_sdata = building_sdata.roots_sdata
-                .get_mut(&block_sdata.root)
+                .get(&block_sdata.root)
                 .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Root serialization data not found."))?;
 
             debug!("> [position]: ");

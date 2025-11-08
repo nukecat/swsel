@@ -259,8 +259,8 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
         connection_ids.len() > 0,
         block.metadata.borrow().is_none(),
         block.color.get().is_none(),
-        load_id.is_some(),
-        false, // Aditional ints flag (not used).
+        load_id.is_none(),
+        true, // Aditional ints flag (not used).
         block.enable_state_current.get() > 1.0f32,
         building_sdata.version >= 3 && block.enable_state_current.get() != 0.0f32
     ];

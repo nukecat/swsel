@@ -3,12 +3,15 @@ use crate::root::*;
 use std::io::{Write, Read};
 
 #[derive(Debug)]
+/// Well... that's a building.
 pub struct Building {
     pub roots: Vec<Rc<Root>>
 }
 
 impl Clone for Building {
     fn clone(&self) -> Self {
+        
+
         Building {
             roots: self.roots.iter().map(|b| Rc::new((**b).clone())).collect()
         }

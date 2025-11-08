@@ -69,7 +69,7 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
     // ---
     
     w.write_u8(version)?;
-    debug!("[version: u8] = {:?}\n", version);
+    debug!("[version]: {:?}\n", version);
 
     // Collecting rotations and colors to vectors and deciding if to use them.
     if version > 5 {
@@ -113,16 +113,16 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
         // Writing color and rotation vectors
         let color_lookup_val = if building_sdata.color_lookup {colors_len as u8} else {u8::MAX};
         w.write_u8(color_lookup_val)?;
-        debug!("[color_lookup: u8] = {:?}\n", color_lookup_val);
+        debug!("[color_lookup]: {:?}\n", color_lookup_val);
 
         let rotation_lookup_val = if building_sdata.rotation_lookup {rotations_len as u16} else {u16::MAX};
         w.write_u16::<LittleEndian>(rotation_lookup_val)?;
-        debug!("[rotation_lookup: u16] = {:?}\n", rotation_lookup_val);
+        debug!("[rotation_lookup]: {:?}\n", rotation_lookup_val);
 
         if building_sdata.color_lookup {
             for color in colors.iter() {
                 w.write_u16::<LittleEndian>(*color.0)?;
-                debug!("[packed_color: u16] = {:?}\n", *color.0);
+                debug!("[packed_color]: {:?}\n", *color.0);
             }
         }
         if building_sdata.rotation_lookup {
@@ -170,10 +170,10 @@ fn write_root<W: Write>(mut w: W, root: &Root, building_sdata: &mut BuildingSeri
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Block serialization data not found."))?;
 
     w.write_array(&root.position.get(), |w, &v| w.write_f32::<LittleEndian>(v))?;
-    debug!("> [position]: {:?}\n", root.position);
+    debug!("> [position]: {:?}\n", root.position.get());
 
     w.write_array(&root.rotation.get(), |w, &v| w.write_f32::<LittleEndian>(v))?;
-    debug!("> [rotation]: {:?}\n", root.rotation);
+    debug!("> [rotation]: {:?}\n", root.rotation.get());
 
     if building_sdata.version >= 1 {
         let mut bounds = new_bounds();
@@ -202,7 +202,6 @@ fn write_root<W: Write>(mut w: W, root: &Root, building_sdata: &mut BuildingSeri
 }
 
 fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingSerializationData) -> io::Result<()> {
-
     // Processing block position and rotation
     {
         let block_sdata = building_sdata.blocks_sdata
@@ -239,9 +238,11 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
         }
 
         w.write_u8(block.id.get())?;
+        debug!("> [block_id]: {:?}\n", block.id.get());
 
         if building_sdata.version < 2 {
             w.write_u16::<LittleEndian>(block_sdata.rid)?;
+            debug!("> [root_id]: {:?}\n", block_sdata.rid);
         }
     }
     // ---
@@ -265,6 +266,17 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
     }
     // ---
 
+    // Flags
+
+    // [0] - true if block has name
+    // [1] - true if block has connections
+    // [2] - false if block has metadata
+    // [3] - false if block has color
+    // [4] - false if block has load
+    // [5] - false if block has additional ints
+    // [6] - true if enable state current > 1
+    // [7] - true if version >= 3 and enable state current not equal to 0
+
     let flags = [
         block.name.borrow().is_some(),
         connection_ids.len() > 0,
@@ -278,12 +290,15 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
 
     let flags_packed = pack_bools(&flags)[0];
     w.write_u8(flags_packed)?;
+    debug!("> [flags_packed]: {:#b}\n", flags_packed);
+    // ---
 
     let write_interactable = building_sdata.version == 0 || BLOCK_FLAGS_VEC[block.id.get() as usize] & flag("non_interactable") == 0;
 
     // Enable state current
     if write_interactable || flags[7] {
         w.write_u8((if flags[6] {1.0f32} else {u8::MAX as f32} * block.enable_state_current.get()) as u8)?;
+        debug!("> [enable_state_current]: {:?}\n", block.enable_state_current.get());
     }
     // ---
 
@@ -293,20 +308,19 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
         if let Some(ref name) = *block.name.borrow() {
             w.write_string_7bit(name)
                 .map_err(|e| Error::new(ErrorKind::Other, format!("name -> {:?}", e)))?;
+            debug!("> [name]: {:?}\n", name);
         }
         // ---
 
         // Enable state (useless comment)
         w.write_u8((block.enable_state.get() * u8::MAX as f32) as u8)?;
+        debug!("> [enable_state]: {:?}\n", block.enable_state.get());
         // ---
 
         // Load
-        if flags[4] {
-            let load_block_data = building_sdata.blocks_sdata
-                .get_mut(&Weak::as_ptr(&block.load.borrow()))
-                .ok_or_else(|| Error::new(ErrorKind::NotFound, "Block data not found."))?;
-
-            w.write_u16::<LittleEndian>(load_block_data.bid)?;    
+        if !flags[4] {
+            w.write_u16::<LittleEndian>(load_id.unwrap())?;
+            debug!("> [load_id]: {:?}\n", load_id.unwrap());
         }
         // ---
 
@@ -323,21 +337,24 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
                     .map_err(|_| Error::new(ErrorKind::InvalidData, "Too many connections! (255 connections max for version > 0, consider reducing ammount of connections per block or use version = 0)"))?;
                 w.write_u8(connections_count_u8)?;
             }
+            debug!("> [connections_count]: {:?}\n", connections_count);
 
             for &bid in connection_ids.iter() {
                 w.write_u16::<LittleEndian>(bid)?;
+                debug!("> > [connected_block_id]: {:?}\n", bid);
             }
         }
         // ---
     }
     // ---
 
-    // Not used.
+    // Not used (additional ints).
     // if !flags[5] && write_interactable {}
     // ---
 
     // Metadata
     if !flags[2] && write_interactable {
+        debug!("> [metadata]: \n");
         write_block_metadata(&mut w, block, building_sdata)
             .map_err(|e| Error::new(ErrorKind::Other, format!("metadata -> {:?}", e)))?;
     }
@@ -346,9 +363,8 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
     // Color
     if !flags[3] {
         if building_sdata.version == 0 {
-            for &value in block.color.get().unwrap_or_default().iter() {
-                w.write_u8(value)?;
-            }
+            w.write_array(&block.color.get().unwrap(), |w, &v| w.write_u8(v))?;
+            debug!("> [color]: {:?} +(const 0xFF)\n", block.color.get().unwrap());
             w.write_u8(u8::MAX)?; // Value for alpha channel that does nothing.
         } else {
             if building_sdata.color_lookup {
@@ -356,8 +372,10 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
                     .get_mut(&(block as *const Block))
                     .ok_or_else(|| Error::new(ErrorKind::NotFound, "Block data not found."))?;
                 w.write_u8(block_sdata.color_id)?;
+                debug!("> [color_id]: {:?}\n", block_sdata.color_id);
             } else {
-                w.write_u16::<LittleEndian>(pack_color(block.color.get().unwrap_or_default()))?;
+                w.write_u16::<LittleEndian>(block_sdata.packed_color)?;
+                debug!("> [packed_color]: {:?}\n", block_sdata.packed_color);
             }
         }
     }

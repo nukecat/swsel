@@ -46,7 +46,14 @@ pub(crate) fn bounds_to_float(t: i16, offset: f32, scale: f32) -> f32 {
     (t as f32) / multiplier + offset
 }
 
-#[inline(always)]
+pub(crate) fn f32x3_to_bounds(f: [f32; 3], offset: [f32; 3], scale: [f32; 3]) -> [i16; 3] {
+    let mut result = [0i16; 3];
+    for i in 0..3 {
+        result[i] = float_to_bounds(f[i], offset[i], scale[i]);
+    }
+    result
+}
+
 pub(crate) fn new_bounds() -> [[f32; 3]; 2] {
     [
         [f32::INFINITY; 3],

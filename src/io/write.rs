@@ -195,13 +195,9 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
                 .get(&block_sdata.root)
                 .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Root serialization data not found."))?;
 
-            debug!("> [position]: ");
-            for i in 0..3 {
-                let value = float_to_bounds(block.position.get()[i], root_sdata.center[i], root_sdata.size[i]);
-                w.write_i16::<LittleEndian>(value)?;
-                debug!("{:?} ", value);
-            }
-            debug!("\n");
+            let position_inbounds = &f32x3_to_bounds(block.position.get(), root_sdata.center, root_sdata.size);
+            w.write_array(position_inbounds, |w, &v| w.write_i16::<LittleEndian>(v))?;
+            debug!("> [position_inbounds]: {:?}\n", position_inbounds);
         }
 
         if building_sdata.rotation_lookup {

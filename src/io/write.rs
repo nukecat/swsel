@@ -49,22 +49,8 @@ pub fn write_building<W: Write>(mut w: W, building: &Building, version: u8) -> i
                 .checked_add(1)
                 .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Too many roots, u16 index overflow!"))?;
         }
-        if broots.len() != building_sdata.roots_sdata.len() {
-            return Err(
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Length of the vector with roots are not equal to the length of the roots seriarizable data map."
-                )
-            );
-        }
-        if bblocks.len() != building_sdata.blocks_sdata.len() {
-            return Err(
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Length of the vector with blocks are not equal to the length of the blocks seriarizable data map."
-                )
-            );
-        }
+        assert!(broots.len() == building_sdata.roots_sdata.len());
+        assert!(bblocks.len() == building_sdata.blocks_sdata.len());
     }
     // ---
     

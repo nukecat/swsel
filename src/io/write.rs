@@ -282,8 +282,10 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
     // Parameters that are used only in interactable blocks.
     if write_interactable {
         // Name
-        if let Some(ref name) = *block.name.borrow() {
-            w.write_string_7bit(name)
+        if flags[0] {
+            let name_ref = block.name.borrow();
+            let name: &str = name_ref.as_ref().unwrap();
+            w.write_string_7bit(&name)
                 .map_err(|e| Error::new(ErrorKind::Other, format!("name -> {:?}", e)))?;
             debug!("> [name]: {:?}\n", name);
         }

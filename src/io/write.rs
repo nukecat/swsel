@@ -2,6 +2,7 @@ use core::str;
 use std::io::{Write, Read};
 use std::ops::Deref;
 use std::{io, marker, u8};
+use crate::definitions::{BLOCK_FLAGS_VEC, flag};
 use crate::root;
 use crate::{building::*, root::*, block::*, io::types::*};
 use indexmap::IndexMap;
@@ -278,7 +279,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
     let flags_packed = pack_bools(&flags)[0];
     w.write_u8(flags_packed)?;
 
-    let write_interactable = building_sdata.version == 0 || false;
+    let write_interactable = building_sdata.version == 0 || BLOCK_FLAGS_VEC[block.id.get() as usize] & flag("non_interactable") == 0;
 
     // Enable state current
     if write_interactable || flags[7] {
@@ -367,7 +368,7 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
 
 fn write_block_metadata<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingSerializationData) -> io::Result<()> {
     if let Some(metadata) = &*block.metadata.borrow() {
-        let is_custom_block = false;
+        let is_custom_block = BLOCK_FLAGS_VEC[block.id.get() as usize] & flag("custom_block") != 0;
 
         match building_sdata.version {
             0 => {

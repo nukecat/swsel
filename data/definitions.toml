@@ -1,10 +1,12 @@
 [[block]]
 id = 0
 name = "metal_block"
+flags = ["non_interactable"]
 
 [[block]]
 id = 1
 name = "wood_block"
+flags = ["non_interactable"]
 
 [[block]]
 id = 2
@@ -15,7 +17,7 @@ values = ["power"]
 [[block]]
 id = 3
 name = "gravity_cannon"
-flags = ["discard"]
+flags = ["tool"]
 
 [[block]]
 id = 4
@@ -32,7 +34,7 @@ name = "table"
 [[block]]
 id = 7
 name = "connector"
-flags = ["discard"]
+flags = ["tool"]
 
 [[block]]
 id = 8
@@ -105,7 +107,7 @@ name = "shock_absorber"
 
 [[block]]
 id = 25
-name = "shock_block"
+name = "shock_absorber_head"
 
 [[block]]
 id = 26
@@ -114,7 +116,7 @@ name = "tank_chassis_controller"
 [[block]]
 id = 27
 name = "saver"
-flags = ["discard"]
+flags = ["tool"]
 
 [[block]]
 id = 28
@@ -214,7 +216,7 @@ name = "machine_gun"
 [[block]]
 id = 50
 name = "painter"
-flags = ["discard"]
+flags = ["tool"]
 
 [[block]]
 id = 51
@@ -231,11 +233,12 @@ name = "camera"
 [[block]]
 id = 54
 name = "teleporter"
-flags = ["discard"]
+flags = ["tool"]
 
 [[block]]
 id = 55
 name = "grenade_launcher"
+flags = ["tool"]
 
 [[block]]
 id = 56
@@ -248,11 +251,11 @@ name = "filter"
 [[block]]
 id = 58
 name = "welding_tool"
-flags = ["discard"]
+flags = ["tool"]
 
 [[block]]
 id = 59
-name = "metal_halfblock"
+name = "metal_halfblock7"
 flags = ["non_interactable"]
 
 [[block]]
@@ -375,17 +378,17 @@ name = "sensor"
 
 [[block]]
 id = 86
-name = "metal_halfblock_2_alt"
+name = "metal_halfblock_8"
 flags = ["non_interactable"]
 
 [[block]]
 id = 87
-name = "glass_halfblock_alt"
+name = "glass_halfblock_8"
 flags = ["non_interactable"]
 
 [[block]]
 id = 88
-name = "wood_halfblock_alt"
+name = "wood_halfblock_8"
 flags = ["non_interactable"]
 
 [[block]]
@@ -484,6 +487,7 @@ name = "large_turbojet_engine"
 [[block]]
 id = 112
 name = "sticker_tool"
+flags = ["tool"]
 
 [[block]]
 id = 113
@@ -563,3 +567,7 @@ flags = ["custom_block"]
 [[block]]
 id = 131
 name = "small_shock_absorber"
+
+[[block]]
+id = 132
+name = "small_shock_absorber_head"

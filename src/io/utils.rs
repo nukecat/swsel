@@ -34,48 +34,61 @@ pub(crate) fn unpack_rotation(data: [u16; 3]) -> [f32; 3] {
     ]
 }
 
-pub(crate) fn float_to_bounds(f: f32, offset: f32, scale: f32) -> i16 {
-    let multiplier = (1.0f32 / scale) * i16::MAX as f32;
-    ((f - offset) * multiplier).round() as i16
+pub(crate) struct Bounds {
+    pub(crate) min: [f32; 3],
+    pub(crate) max: [f32; 3]
 }
 
-pub(crate) fn bounds_to_float(t: i16, offset: f32, scale: f32) -> f32 {
-    let multiplier = (1.0f32 / scale) * i16::MAX as f32;
-    (t as f32) / multiplier + offset
+impl Bounds {
+    pub(crate) const fn new() -> Self {
+        Bounds {
+            min: [f32::INFINITY; 3],
+            max: [f32::NEG_INFINITY; 3]
+        }
 }
 
-pub(crate) fn f32x3_to_bounds(f: [f32; 3], offset: [f32; 3], scale: [f32; 3]) -> [i16; 3] {
+    pub(crate) const fn get_center_and_size(&self) -> ([f32; 3], [f32; 3]) {
+        let mut center = [0.0f32; 3];
+        let mut size = [0.0f32; 3];
+
+        let mut i = 0;
+        while i < 3 {
+            center[i] = (self.min[i] + self.max[i]) * 0.5;
+            size[i] = self.max[i] - self.min[i];
+            i += 1;
+        }
+
+        (center, size)
+}
+
+    pub(crate) fn to_inbounds(&self, f: [f32; 3]) -> [i16; 3] {
+        let (center, size) = self.get_center_and_size();
+
     let mut result = [0i16; 3];
     for i in 0..3 {
-        result[i] = float_to_bounds(f[i], offset[i], scale[i]);
+            let multiplier = (1.0f32 / size[i]) * i16::MAX as f32;
+            result[i] = ((f[i] - center[i]) * multiplier).round() as i16
     }
     result
 }
 
-pub(crate) fn new_bounds() -> [[f32; 3]; 2] {
-    [
-        [f32::INFINITY; 3],
-        [f32::NEG_INFINITY; 3]
-    ]
+    pub(crate) fn to_global(&self, v: [i16; 3]) -> [f32; 3] {
+        let (center, size) = self.get_center_and_size();
+
+        let mut result = [0.0f32; 3];
+        for i in 0..3 {
+            let multiplier = size[i] / i16::MAX as f32;
+            result[i] = center[i] + v[i] as f32 * multiplier;
+        }
+        result
 }
 
-pub(crate) fn bounds_encapsulate(bounds: &mut [[f32; 3]; 2], block_position: [f32; 3]) {
+    pub(crate) fn encapsulate(&mut self, block_position: &[f32; 3]) {
     for i in 0..3 {
-        bounds[0][i] = bounds[0][i].min(block_position[i]);
-        bounds[1][i] = bounds[1][i].max(block_position[i]);
+            self.min[i] = self.min[i].min(block_position[i]);
+            self.max[i] = self.max[i].max(block_position[i]);
     }
 }
-
-pub(crate) fn bounds_center_and_size(bounds: &[[f32; 3]; 2]) -> ([f32; 3], [f32; 3]) {
-    let mut center = [0.0f32; 3];
-    let mut size = [0.0f32; 3];
-
-    for i in 0..3 {
-        center[i] = (bounds[0][i] + bounds[1][i]) * 0.5;
-        size[i] = (bounds[1][i] - bounds[0][i])
-    }
-
-    (center, size)
 }
 
 pub(crate) fn pack_bools(bools: &[bool]) -> Vec<u8> {

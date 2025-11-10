@@ -1,4 +1,4 @@
-use crate::{block::*, root::*};
+use crate::{block::*, io::utils::Bounds, root::*};
 use std::{cell::RefCell, ptr::null, rc::Rc};
 use indexmap::{IndexMap};
 
@@ -29,8 +29,7 @@ impl BlockSerializationData {
 pub(crate) struct RootSerializationData {
     pub(crate) rid: u16,
     pub(crate) last_block_index: u16,
-    pub(crate) center: [f32; 3],
-    pub(crate) size: [f32; 3]
+    pub(crate) bounds: Bounds
 }
 
 impl RootSerializationData {
@@ -38,8 +37,7 @@ impl RootSerializationData {
         RootSerializationData {
             rid: 0,
             last_block_index: 0,
-            center: [0.0f32; 3],
-            size: [0.0f32; 3]
+            bounds: Bounds::new()
         }
     }
 }

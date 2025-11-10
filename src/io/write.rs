@@ -155,19 +155,14 @@ fn write_root<W: Write>(mut w: W, root: &Root, building_sdata: &mut BuildingSeri
     debug!("> [rotation]: {:?}\n", root.rotation.get());
 
     if building_sdata.version >= 1 {
-        let mut bounds = new_bounds();
         for block in root.blocks.borrow().iter() {
-            bounds_encapsulate(&mut bounds, block.position.get());
+            root_sdata.bounds.encapsulate(&block.position.get());
         }
 
-        let (center, size) = bounds_center_and_size(&bounds);
-
-        root_sdata.center = center;
-        root_sdata.size = size;
+        let (center, size) = root_sdata.bounds.get_center_and_size();
 
         w.write_array(&center, |w, &v| w.write_f32::<LittleEndian>(v))?;
         debug!("> [center]: {:?}\n", center);
-
         w.write_array(&size, |w, &v| w.write_f32::<LittleEndian>(v))?;
         debug!("> [size]: {:?}\n", size);
     }
@@ -195,8 +190,8 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
                 .get(&block_sdata.root)
                 .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Root serialization data not found."))?;
 
-            let position_inbounds = &f32x3_to_bounds(block.position.get(), root_sdata.center, root_sdata.size);
-            w.write_array(position_inbounds, |w, &v| w.write_i16::<LittleEndian>(v))?;
+            let position_inbounds = root_sdata.bounds.to_inbounds(block.position.get());
+            w.write_array(&position_inbounds, |w, &v| w.write_i16::<LittleEndian>(v))?;
             debug!("> [position_inbounds]: {:?}\n", position_inbounds);
         }
 

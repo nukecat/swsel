@@ -213,3 +213,23 @@ pub trait WriteUtils: Write {
 }
 
 impl<W: Write + ?Sized> WriteUtils for W {} 
+
+#[test]
+fn test_pack_unpack_roundtrip() {
+    use rand::Rng;
+
+    let mut rng = rand::rng();
+
+    for _ in 0..1000 {
+        let rgb: [u8; 3] = [rng.random(), rng.random(), rng.random()];
+        let packed = pack_color(rgb);
+        let unpacked = unpack_color(packed);
+        let repacked = pack_color(unpacked);
+
+        assert_eq!(
+            packed, repacked,
+            "Round-trip failed: original {:?}, packed {:#06x}, unpacked {:?}, repacked {:#06x}",
+            rgb, packed, unpacked, repacked
+        );
+    }
+}

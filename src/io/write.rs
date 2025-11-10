@@ -365,44 +365,216 @@ fn write_block<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingS
 }
 
 fn write_block_metadata<W: Write>(mut w: W, block: &Block, building_sdata: &mut BuildingSerializationData) -> io::Result<()> {
-    if let Some(metadata) = &*block.metadata.borrow() {
-        let is_custom_block = BLOCK_FLAGS_VEC[block.id.get() as usize] & flag("custom_block") != 0;
+    let metadata_cell = block.metadata.borrow();
+    let metadata = metadata_cell
+        .as_ref()
+        .ok_or_else(|| Error::new(ErrorKind::NotFound, "Block data not found."))?;
+    
+    let is_custom_block = BLOCK_FLAGS_VEC[block.id.get() as usize] & flag("custom_block") != 0;
 
-        match building_sdata.version {
-            0 => {
-                w.write_u16::<LittleEndian>(metadata.ticks.len() as u16)?;
-                for &value in metadata.ticks.iter() {
-                    w.write_u8(value as u8)?;
-                }
+    let toggles = metadata.toggles.borrow();
+    let values = metadata.values.borrow();
+    let fields = metadata.fields.borrow();
+    let dropdowns = metadata.dropdowns.borrow();
+    let colors = metadata.colors.borrow();
+    let gradients = metadata.gradients.borrow();
+    let vectors = metadata.vectors.borrow();
 
-                w.write_u16::<LittleEndian>(metadata.values.len() as u16)?;
-                for &value in metadata.values.iter() {
-                    w.write_f32::<LittleEndian>(value)?;
-                }
+    match building_sdata.version {
+        0 => {
+            // Toggles
+            w.write_array_with_length(|w, &l| w.write_u16::<LittleEndian>(l), |w, &v| w.write_u8(v as u8), &toggles)?;
+            // ---
 
-                w.write_u16::<LittleEndian>((metadata.fields.borrow().len() + if metadata.vectors.len() != 0 {u16::MAX as usize / 2} else {0}) as u16)?;
+            // Values
+            w.write_array_with_length(|w, &l| w.write_u16::<LittleEndian>(l), |w, &v| w.write_f32::<LittleEndian>(v), &values)?;
+            // ---
 
-                if metadata.vectors.len() != 0 {
-                    for &vector in metadata.vectors.iter() {
-                        for &value in vector.iter() {
-                            w.write_f32::<LittleEndian>(value)?;
-                        }
-                    }
-                }
+            // Vectors and fields
+            let vectors_len = u16::try_from(vectors.len())
+                .map_err(|_| Error::new(ErrorKind::Other, "Too many vectors, u16 overflow."))?;
+            let fields_len = u16::try_from(fields.len())
+                .unwrap_or(0xFFFF);
+            if fields_len > 0x7FFF {
+                return Err(Error::new(ErrorKind::Other, "Too many fields, max is 0x7FFF (32767)"))?;
+            }
 
-                for field in metadata.fields.borrow().iter() {
-                    for block in field.iter()
-                        .filter_map(|w| w.upgrade())
-                    {
-
-                    }
+            // > The first bit tells if block has vectors, the other bits tell amount of fields.
+            w.write_u16::<LittleEndian>(fields_len + if vectors_len != 0 {0x8000} else {0})?;
+            if vectors_len != 0 {
+                w.write_u16::<LittleEndian>(vectors_len)?;
+                for vector in vectors.iter() {
+                    w.write_array(vector, |w, &v| w.write_f32::<LittleEndian>(v))?;
                 }
             }
 
-            _ => {}
+            for field in fields.iter() {
+                for block in field.iter()
+                    .filter_map(|w| w.upgrade())
+                {
+                    let block_in_field_sdata = building_sdata.blocks_sdata
+                        .get(&Rc::as_ptr(&block))
+                        .ok_or_else(|| Error::new(ErrorKind::NotFound, "Block data not found"))?;
+                    
+                    w.write_u16::<LittleEndian>(block_in_field_sdata.bid)?;
+                }
+            }
+            // ---
+            
+            // Dropdowns
+            w.write_array_with_length(|w, &l| w.write_u16::<LittleEndian>(l), |w, &v| w.write_u8(v), &dropdowns)?;
+            // ---
+
+            // Colors
+            w.write_array_with_length(
+                |w, &l| w.write_u16::<LittleEndian>(l),
+                |w, &v| w.write_array(&v, |w, &v| w.write_f32::<LittleEndian>(v)),
+                colors.as_ref()
+            )?;
+            // ---
+
+            // Gradients
+            w.write_u16::<LittleEndian>(gradients.len() as u16)?;
+            for gradient in gradients.iter() {
+                w.write_gradient::<LittleEndian>(gradient)?;
+            }
+            // ---
         }
-    } else {
-        return Err(Error::new(ErrorKind::Other, "no metadata"));
+
+        _ => {
+            // Toggles
+            let toggles_len = u8::try_from(toggles.len())
+                .map_err(|_| Error::new(ErrorKind::Other, "Too many toggles, u8 overflow."))?;
+            
+            w.write_u8(toggles_len)?;
+            if building_sdata.version < 5 {
+                w.write_array(&toggles, |w, &v| w.write_u8(v as u8))?;
+            } else {
+                w.write_array(&pack_bools(&toggles), |w, &v| w.write_u8(v))?;
+            }
+            // ---
+
+            // Vectors and fields
+            let vectors_len = u8::try_from(vectors.len())
+                    .map_err(|_| Error::new(ErrorKind::Other, "Too many vectors, u8 overflow."))?;
+            if is_custom_block {
+                w.write_u8(vectors_len)?;
+            } else {
+                let fields_len = u8::try_from(fields.len())
+                    .unwrap_or(0xFF);
+                if fields_len > 0x7F {
+                    Err(Error::new(ErrorKind::Other, "Amount of vectors must be not bigger than 0x7F (127) for non custom block type."))?;
+                }
+                w.write_u8(fields_len + if vectors_len != 0 {0x80} else {0})?;
+            }
+            // > Vectors:
+            if vectors.len() != 0 {
+                if !is_custom_block {
+                    w.write_u8(vectors_len)?;
+                    for vector in vectors.iter() {
+                        w.write_array(vector, |w, &v| w.write_f32::<LittleEndian>(v))?;
+                    }
+                } else {
+                    let mut bounds = Bounds::new();
+
+                    for vector in vectors.iter() {
+                        bounds.encapsulate(&vector);
+                    }
+
+                    let min = bounds.min.iter().copied().reduce(f32::min).unwrap();
+                    let max = bounds.max.iter().copied().reduce(f32::max).unwrap();
+
+
+                    // Should we check if values are inside of range -128..127?
+
+        
+                    w.write_i8(min.floor() as i8)?;
+                    w.write_i8(max.ceil() as i8)?;
+
+                    let map = |x| ((x - min) / (max - min) * u16::MAX as f32) as u16;
+                    for vector in vectors.iter() {
+                        w.write_array(vector, |w, &v| w.write_u16::<LittleEndian>(map(v)))?;
+                    }
+                }
+            }
+            // > Fields:
+            for field in fields.iter() {
+                let blocks_len = u8::try_from(field.len())
+                    .map_err(|_| Error::new(ErrorKind::Other, "Too many blocks in field, u8 overflow."))?;
+                w.write_u8(blocks_len)?;
+
+                for block in field.iter()
+                    .filter_map(|w| w.upgrade())
+                {
+                    let block_in_field_sdata = building_sdata.blocks_sdata
+                        .get(&Rc::as_ptr(&block))
+                        .ok_or_else(|| Error::new(ErrorKind::NotFound, "Block data not found"))?;
+                    
+                    // idk what to do with this,
+                    // in the code, provided from xmake, 
+                    // but we dont have something like this here,
+                    // and i dont know why would we need to write that
+
+                    // Okay, lets just check if block id is not equal to u16::MAX
+                    if block_in_field_sdata.bid == u16::MAX {
+                        return Err(Error::new(ErrorKind::Other, "Block id in fields can't be equal to u16::MAX, because this value is reserved. (Why do you have 65535 blocks wth)"));
+                    }
+
+                    w.write_u16::<LittleEndian>(block_in_field_sdata.bid)?;
+                }
+            }
+            // ---
+
+            // Dropdowns, colors and gradients
+            if building_sdata.version < 5 {
+                // Dropdowns
+                w.write_array_with_length(|w, &l| w.write_u16::<LittleEndian>(l), |w, &v| w.write_u8(v), &dropdowns)?;
+
+                // Colors
+                w.write_array_with_length(
+                    |w, &l| w.write_u16::<LittleEndian>(l),
+                    |w, &v| w.write_array(&v, |w, &v| w.write_f32::<LittleEndian>(v)),
+                    colors.as_ref()
+                )?;
+
+                // Gradients
+                w.write_u16::<LittleEndian>(gradients.len() as u16)?;
+                for gradient in gradients.iter() {
+                    w.write_gradient::<LittleEndian>(gradient)?;
+                }
+            } else {
+                let dropdowns_len = u8::try_from(dropdowns.len())
+                    .unwrap_or(0xFF);
+
+                if dropdowns_len < 0x3F {
+                    return Err(Error::new(ErrorKind::Other, "Amount of dropdowns must be not bigger than 0x3F (63)"))?;
+                }
+
+                let b: u8 = dropdowns_len | ((colors.len() > 0) as u8) << 6 | ((gradients.len() > 0) as u8) << 7;
+                
+                w.write_u8(b)?;
+
+                w.write_array(&dropdowns, |w, &v| w.write_u8(v))?;
+
+                if colors.len() > 0 {
+                    w.write_array_with_length(
+                        |w, &l| w.write_u8(l),
+                        |w, &v| w.write_array(&v, |w, &v| w.write_f32::<LittleEndian>(v)),
+                        &colors
+                    )?;
+                }
+                
+                let gradients_len = u8::try_from(gradients.len())
+                    .map_err(|_| Error::new(ErrorKind::Other, "Too many gradients, u8 overflow."))?;
+
+                if gradients_len > 0 {
+                    w.write_u8(gradients_len)?;
+                    for gradient in gradients.iter() {
+                        w.write_gradient::<LittleEndian>(gradient)?;
+                    }
+                }
+            }
+        }
     }
 
     Ok(())
